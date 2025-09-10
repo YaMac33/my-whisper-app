@@ -25,7 +25,7 @@ my-whisper-app/
 ├─ assets/                   # アイコンや画像素材
 ├─ README.md                 # プロジェクト概要
 └─ .github/
-└─ workflows/ci.yml      # 自動ビルド・デプロイ用GitHub Actions
+    └─ workflows/ci.yml      # 自動ビルド・デプロイ用GitHub Actions
 ```
 
 ---
