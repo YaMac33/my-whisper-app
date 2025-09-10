@@ -1,0 +1,476 @@
+<!doctype html>
+<!--
+  File: my-whisper-app/index.html
+  Purpose:
+    - シンプルなブラウザ録音 → 音声ファイル送信 → 文字起こし（Whisper等のサーバ処理へ転送）
+    - クライアント単体で録音・再生・プレビュー・サーバ送信を行える。
+    - このHTMLは「フロントエンド部分のみ」です。実際にOpenAI Whisperや別サービスへ送信して文字起こしするには、
+      サーバ側エンドポイント (/transcribe など) を別途用意してください（コメント参照）。
+  注意:
+    - APIキーやシークレットをクライアント側に置かないでください（セキュリティリスク）。
+    - サーバ側で OpenAI の audio.transcriptions エンドポイント 等に問い合わせるのが安全です。
+  全ての解説はこのコードブロック内のコメントに記載します（ご要望通り）。
+-->
+
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>My Whisper App — 録音して文字起こし</title>
+
+  <!-- 簡単なスタイル -->
+  <style>
+    /* 全体レイアウト */
+    :root{
+      --bg:#0f1720;
+      --card:#0b1220;
+      --accent:#60a5fa;
+      --muted:#94a3b8;
+      --glass: rgba(255,255,255,0.03);
+      --radius:12px;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,var(--bg),#071022);color:#e6eef8}
+    .wrap{max-width:920px;margin:36px auto;padding:24px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:16px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 8px 0;font-size:20px}
+    p.lead{margin:0 0 18px 0;color:var(--muted);font-size:13px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+    button, select, input[type="file"]{background:var(--glass);border:1px solid rgba(255,255,255,0.04);color:inherit;padding:10px 14px;border-radius:10px;font-size:14px}
+    button.primary{background:linear-gradient(90deg,var(--accent),#3b82f6);border:none;color:#072033}
+    .meter{height:8px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden}
+    .meter > i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#34d399,#60a5fa)}
+    .cols{display:grid;grid-template-columns:1fr 360px;gap:18px}
+    .card{background:rgba(255,255,255,0.02);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.02);min-height:120px}
+    .transcript{white-space:pre-wrap;font-size:14px;line-height:1.5;color:#e8f0fb;overflow:auto;max-height:420px;padding:6px}
+    .small{font-size:12px;color:var(--muted)}
+    footer{margin-top:18px;font-size:12px;color:var(--muted)}
+    .file-hint{font-size:12px;color:var(--muted);margin-top:6px}
+    audio{width:100%;margin-top:10px}
+    progress{width:100%}
+    .hidden{display:none}
+    @media (max-width:920px){ .cols{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <div class="wrap" role="main">
+    <h1>My Whisper App</h1>
+    <p class="lead">ブラウザで録音して、サーバに音声を送って文字起こし（Whisper等）を実行します。下の説明は全てコード内コメントに記載。</p>
+
+    <!-- コントロール群 -->
+    <div class="controls" aria-hidden="false">
+      <!-- 録音ボタン -->
+      <button id="btnRecord" class="primary" aria-pressed="false">録音開始</button>
+      <button id="btnStop" disabled>録音停止</button>
+
+      <!-- ローカルから音声ファイルをアップロードして文字起こしする -->
+      <label>
+        <input id="fileInput" type="file" accept="audio/*" style="display:none">
+        <button id="btnFile">ファイルを選択</button>
+      </label>
+
+      <!-- 文字起こしを依頼するサーバのエンドポイント（デバッグ用） -->
+      <select id="endpointSelect" title="送信先エンドポイント">
+        <option value="/transcribe" selected>POST /transcribe (推奨：サーバ経由でOpenAIへ)</option>
+        <option value="direct-openai">直接OpenAI（非推奨）</option>
+      </select>
+
+      <!-- 言語（任意） -->
+      <select id="langSelect" title="音声の言語（サーバ側で使用）">
+        <option value="">自動検出（auto）</option>
+        <option value="ja">日本語 (ja)</option>
+        <option value="en">英語 (en)</option>
+        <option value="zh">中国語 (zh)</option>
+        <option value="es">スペイン語 (es)</option>
+      </select>
+    </div>
+
+    <!-- レベルメーター -->
+    <div class="meter" aria-hidden="true"><i id="levelBar"></i></div>
+
+    <div class="cols" style="margin-top:16px">
+      <!-- メイン：文字起こし結果 -->
+      <div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>文字起こし結果</strong>
+            <div class="small">状態: <span id="status">待機中</span></div>
+          </div>
+          <div id="transcript" class="transcript" aria-live="polite"></div>
+
+          <!-- 生成されたSRT/TXTのダウンロード -->
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button id="btnCopy" class="small" disabled>コピー</button>
+            <button id="btnDownloadTxt" class="small" disabled>ダウンロード (TXT)</button>
+            <button id="btnDownloadSrt" class="small" disabled>SRTを生成</button>
+          </div>
+        </div>
+
+        <!-- 録音プレビュー -->
+        <div class="card" style="margin-top:12px">
+          <strong>録音プレビュー</strong>
+          <div class="file-hint">録音後は再生して確認できます。</div>
+          <audio id="audioPreview" controls class="hidden"></audio>
+        </div>
+      </div>
+
+      <!-- サイド：ログと設定 -->
+      <div>
+        <div class="card">
+          <strong>ログ / デバッグ</strong>
+          <pre id="log" style="margin:8px 0 0 0;white-space:pre-wrap;color:var(--muted);font-size:13px;max-height:280px;overflow:auto"></pre>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <strong>使い方（要約）</strong>
+          <ol style="padding-left:18px;margin:8px 0 0 0" class="small">
+            <li>「録音開始」でマイク録音。もう一度「録音停止」で終了。</li>
+            <li>録音ファイルは自動的にサーバへ送信（/transcribe）。結果が返ってきたら表示。</li>
+            <li>ファイルアップロードでも同様に送信可能。</li>
+            <li>サーバは OpenAI Whisper のような音声文字起こしAPIに安全に接続してください。</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <!-- フッタ注意書き -->
+      <div class="small">注：このファイルはフロントエンドのみ。サーバ側プロキシが必要です。以下のコメント参照。</div>
+    </footer>
+  </div>
+
+  <!-- スクリプト -->
+  <script>
+  /*
+    以下はフロントエンドの振る舞いを実装したJavaScriptです。
+
+    主な機能:
+      - マイクからの録音（MediaRecorder）
+      - 録音レベルの簡易表示（Web Audio API）
+      - 録音終了後に Blob をサーバへ送信（FormData）
+      - ファイルアップロードからの送信対応
+      - 受け取った文字起こしテキストの表示・コピー・ダウンロード（TXTおよび簡易SRT）
+
+    サーバ側の実装方針（推奨）:
+      - /transcribe エンドポイントを実装し、以下を行う：
+        1) 受け取った audio file を一時保存
+        2) OpenAI の audio.transcriptions（または Whisper API）へサーバ側からリクエスト
+           - OpenAI の場合、APIキーはサーバ環境変数に保持し、クライアントに公開しないこと
+           - リクエスト例（サーバ側）: multipart/form-data (file + model="whisper-1" + language)
+        3) 変換結果（JSON）をクライアントに返す
+      - これにより API キー漏洩を防ぎ、安全にサービスを構築できます。
+
+    直接クライアントから OpenAI に送る方法（非推奨）:
+      - セキュリティ上の理由でやめてください。もし試すならAPIキーをブラウザに置かないでください。
+      - ここではその実装は例示しません（危険）。
+  */
+
+  (function(){
+    // UI要素
+    const btnRecord = document.getElementById('btnRecord');
+    const btnStop = document.getElementById('btnStop');
+    const btnFile = document.getElementById('btnFile');
+    const fileInput = document.getElementById('fileInput');
+    const levelBar = document.getElementById('levelBar');
+    const transcriptEl = document.getElementById('transcript');
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const audioPreview = document.getElementById('audioPreview');
+    const endpointSelect = document.getElementById('endpointSelect');
+    const langSelect = document.getElementById('langSelect');
+
+    const btnCopy = document.getElementById('btnCopy');
+    const btnDownloadTxt = document.getElementById('btnDownloadTxt');
+    const btnDownloadSrt = document.getElementById('btnDownloadSrt');
+
+    // 内部状態
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioStream = null;
+    let audioContext = null;
+    let analyser = null;
+    let rafId = null;
+
+    function log(...args){
+      const t = new Date().toLocaleTimeString();
+      logEl.textContent = `[${t}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n' + logEl.textContent;
+    }
+
+    // レベルメーター更新
+    function startMeter(stream){
+      if(!window.AudioContext) return;
+      audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      function loop(){
+        analyser.getByteFrequencyData(data);
+        // RMSの簡易計算
+        let sum = 0;
+        for(let i=0;i<data.length;i++){
+          const v = data[i] / 255;
+          sum += v*v;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        const percent = Math.min(100, Math.round(rms * 200)); // overamplify for better visibility
+        levelBar.style.width = percent + '%';
+        rafId = requestAnimationFrame(loop);
+      }
+      loop();
+    }
+
+    function stopMeter(){
+      if(rafId) cancelAnimationFrame(rafId);
+      if(audioContext){
+        audioContext.close().catch(()=>{});
+        audioContext = null;
+      }
+      levelBar.style.width = '0%';
+    }
+
+    // 録音開始
+    btnRecord.addEventListener('click', async () => {
+      try {
+        btnRecord.disabled = true;
+        statusEl.textContent = 'マイクアクセス要求中...';
+        // 標準的なマイクアクセス
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        startMeter(audioStream);
+
+        // MediaRecorderを準備
+        mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm;codecs=opus' });
+        audioChunks = [];
+
+        mediaRecorder.addEventListener('dataavailable', e => {
+          if(e.data && e.data.size > 0) audioChunks.push(e.data);
+        });
+
+        mediaRecorder.addEventListener('stop', () => {
+          // 録音が止まったらBlobを作って処理
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          onRecordedBlob(blob);
+        });
+
+        mediaRecorder.start();
+        btnStop.disabled = false;
+        btnRecord.textContent = '録音中...';
+        btnRecord.setAttribute('aria-pressed','true');
+        statusEl.textContent = '録音中';
+        log('録音開始');
+      } catch (err){
+        console.error(err);
+        log('マイクアクセスエラー', String(err));
+        statusEl.textContent = 'マイクアクセス失敗';
+        btnRecord.disabled = false;
+      }
+    });
+
+    // 録音停止
+    btnStop.addEventListener('click', () => {
+      if(mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        btnStop.disabled = true;
+        btnRecord.textContent = '録音開始';
+        btnRecord.disabled = false;
+        btnRecord.setAttribute('aria-pressed','false');
+        statusEl.textContent = '録音停止';
+        log('録音停止');
+      }
+      if(audioStream){
+        audioStream.getTracks().forEach(t => t.stop());
+        audioStream = null;
+      }
+      stopMeter();
+    });
+
+    // ファイル選択ボタン
+    btnFile.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if(!file) return;
+      log('ファイル選択', file.name, file.type, file.size);
+      // プレビュー表示
+      audioPreview.src = URL.createObjectURL(file);
+      audioPreview.classList.remove('hidden');
+      // そのまま送信
+      sendFileForTranscription(file);
+    });
+
+    // 録音ブロブハンドリング
+    function onRecordedBlob(blob){
+      log('録音データ準備', blob.type, Math.round(blob.size/1024) + ' KB');
+
+      // プレビュー audio 要素にセット
+      audioPreview.src = URL.createObjectURL(blob);
+      audioPreview.classList.remove('hidden');
+
+      // 自動送信
+      sendFileForTranscription(blob, 'recording.webm');
+    }
+
+    // 送信処理
+    async function sendFileForTranscription(fileOrBlob, filename = 'recording.webm'){
+      try {
+        statusEl.textContent = '送信中...';
+        transcriptEl.textContent = '';
+        btnCopy.disabled = true;
+        btnDownloadTxt.disabled = true;
+        btnDownloadSrt.disabled = true;
+
+        const selectedEndpoint = endpointSelect.value;
+        const language = langSelect.value;
+
+        // 送信先は2種類の動作をサポート（推奨：/transcribe）
+        if(selectedEndpoint === 'direct-openai'){
+          // ----- ここは「例示」: 直接OpenAIへ送る（クライアント側でキーを使用することは推奨されません）
+          // 以下のコードは安全上の理由からコメントアウトしてあります。実行するなら自分の責任で。
+          /*
+          const form = new FormData();
+          form.append('file', fileOrBlob, filename);
+          form.append('model', 'whisper-1');
+          if(language) form.append('language', language);
+
+          // !!! セキュリティ注意 !!!: ブラウザにAPIキーを置くと漏洩します。絶対に本番で使わないでください。
+          const OPENAI_KEY = 'REPLACE_WITH_YOUR_KEY'; // ← 絶対にここに鍵を置かないでください
+          const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + OPENAI_KEY },
+            body: form
+          });
+          const data = await res.json();
+          handleTranscriptionResponse(data);
+          */
+
+          log('direct-openai が選択されましたが、クライアント直接送信は推奨されません。サーバプロキシを使ってください。');
+          statusEl.textContent = 'エラー: direct-openaiは非推奨';
+          return;
+        }
+
+        // ----- 推奨パターン: サーバ側 /transcribe に送信する -----
+        const fd = new FormData();
+        fd.append('file', fileOrBlob, filename);
+        if(language) fd.append('language', language);
+
+        // ここで /transcribe に POST します。サーバは OpenAI 等に問い合わせて結果を返す想定です。
+        // 返却フォーマット想定（例）:
+        // { ok: true, text: "文字起こし結果", segments: [ {start, end, text}, ... ] }
+        statusEl.textContent = 'サーバへ送信中...';
+        log('サーバへ送信', '/transcribe (フォームデータ)');
+
+        const resp = await fetch('/transcribe', { method: 'POST', body: fd });
+        if(!resp.ok){
+          const txt = await resp.text();
+          log('サーバエラー', resp.status, txt);
+          statusEl.textContent = 'サーバエラー: ' + resp.status;
+          return;
+        }
+        const j = await resp.json();
+        log('サーバ応答', j);
+        if(j.ok){
+          handleTranscriptionResponse(j);
+          statusEl.textContent = '完了';
+        } else {
+          statusEl.textContent = '変換失敗';
+          transcriptEl.textContent = j.error || JSON.stringify(j);
+        }
+      } catch (err){
+        console.error(err);
+        log('送信例外', String(err));
+        statusEl.textContent = '送信エラー';
+      }
+    }
+
+    // 受け取ったレスポンスを処理して表示する
+    function handleTranscriptionResponse(resp){
+      // resp.text を主に使用。セグメントがあればそれを使って簡易SRTを作成可能。
+      const text = resp.text || (resp.data && resp.data.text) || '';
+      transcriptEl.textContent = text || '[空の結果]';
+      btnCopy.disabled = !text;
+      btnDownloadTxt.disabled = !text;
+      btnDownloadSrt.disabled = !(Array.isArray(resp.segments) && resp.segments.length>0);
+      // 便利のために segments があれば内部に保存しておく
+      transcriptEl._segments = resp.segments || null;
+    }
+
+    // コピー機能
+    btnCopy.addEventListener('click', async () => {
+      const text = transcriptEl.textContent;
+      if(!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        log('結果をクリップボードにコピーしました');
+      } catch (err){
+        log('コピー失敗', err);
+      }
+    });
+
+    // TXTダウンロード
+    btnDownloadTxt.addEventListener('click', () => {
+      const text = transcriptEl.textContent;
+      if(!text) return;
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'transcript.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      log('TXT をダウンロードしました');
+    });
+
+    // SRT生成（segments がある場合）
+    btnDownloadSrt.addEventListener('click', () => {
+      const segments = transcriptEl._segments;
+      if(!segments || !segments.length) return;
+      const srt = segmentsToSrt(segments);
+      const blob = new Blob([srt], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'transcript.srt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      log('SRT をダウンロードしました');
+    });
+
+    // segments -> SRT に変換する（簡易実装）
+    function segmentsToSrt(segments){
+      // segments: [{ start: 0.0, end: 2.34, text: '...' }, ...]
+      function fmtTime(t){
+        // SRT は hh:mm:ss,ms
+        const ms = Math.floor((t - Math.floor(t)) * 1000);
+        const sec = Math.floor(t) % 60;
+        const min = Math.floor(t/60) % 60;
+        const hr = Math.floor(t/3600);
+        function pad(n, l=2){ return String(n).padStart(l,'0'); }
+        return `${pad(hr)}:${pad(min)}:${pad(sec)},${String(ms).padStart(3,'0')}`;
+      }
+      return segments.map((s,i)=>`${i+1}\n${fmtTime(s.start)} --> ${fmtTime(s.end)}\n${s.text.trim()}\n`).join('\n');
+    }
+
+    // 初期ログ
+    log('アプリ初期化完了');
+
+    // フォールバック: サーバエンドポイントがない場合のガイダンス（ログに表示）
+    (async function checkServer(){
+      try {
+        // 簡易ヘルスチェック（GET /transcribe が 200 を返すことは期待されないが404/401でも良い）
+        const r = await fetch('/transcribe', { method: 'OPTIONS' });
+        log('サーバ /transcribe にアクセス可能（OPTIONS）', r.status);
+      } catch(e){
+        log('注意: /transcribe エンドポイントに接続できませんでした。サーバプロキシを用意してください。');
+      }
+    })();
+
+    // アクセシビリティ: キーボードでも使えるようにEnterでファイル選択をトリガー
+    document.getElementById('btnFile').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') fileInput.click(); });
+
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,480 @@
+/* my-whisper-app/style.css
+   ------------------------------------------------------------
+   Whisper App 用スタイルシート
+   - このファイルには UI（レイアウト／色／レスポンシブ／アクセシビリティ）
+     のためのすべてのスタイルを含みます。
+   - 下の各セクションには「なぜそのスタイルがあるか」を日本語でコメントしています。
+   - 必要に応じてカスタムプロパティ（CSS変数）を上書きしてください。
+   ------------------------------------------------------------ */
+
+/* =========================
+   ルート変数 — テーマ & 共通値
+   ========================= */
+:root{
+  /* カラーパレット（ライトモード基準） */
+  --bg: #0f1722;                 /* 背景（濃い） */
+  --panel: #0b1220;              /* パネル背景 */
+  --muted: #98a3b3;              /* 補助テキスト */
+  --text: #e6eef8;               /* 本文テキスト */
+  --accent: #5eead4;             /* アクセント（録音/進行） */
+  --accent-2: #60a5fa;           /* セカンダリアクセント（ボタン等） */
+  --danger: #fb7185;             /* エラー */
+  --glass: rgba(255,255,255,0.03);/* うっすらのガラス感 */
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --gap-xs: 6px;
+  --gap-sm: 12px;
+  --gap-md: 20px;
+  --gap-lg: 32px;
+
+  --shadow-soft: 0 6px 18px rgba(2,6,23,0.6);
+
+  --fs-sm: 0.85rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.25rem;
+  --max-width: 980px;
+  --content-padding: 20px;
+  --transition-fast: 160ms ease;
+  --transition-medium: 280ms cubic-bezier(.2,.9,.3,1);
+}
+
+/* ダーク・ライトはアプリ側で切替可能にしておく
+   body に .light-theme を付ければライトテーマ */
+body {
+  margin: 0;
+  font-family: Inter, "Noto Sans JP", system-ui, -apple-system, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  font-size: var(--fs-base);
+  color: var(--text);
+  background: linear-gradient(180deg, var(--bg) 0%, #07101a 100%);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  box-sizing: border-box;
+}
+
+/* ライトテーマ（簡易） */
+body.light-theme {
+  --bg: #f6fafc;
+  --panel: #ffffff;
+  --muted: #6b7280;
+  --text: #0b1220;
+  --accent: #0ea5a4;
+  --accent-2: #2563eb;
+  --glass: rgba(11,18,32,0.03);
+  background: linear-gradient(180deg, #f8fcff 0%, #eef6fb 100%);
+}
+
+/* =========================
+   アプリ全体のラップ
+   ========================= */
+.app {
+  width: 100%;
+  max-width: var(--max-width);
+  box-sizing: border-box;
+  padding: var(--content-padding);
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.03);
+  display: grid;
+  grid-template-columns: 1fr 420px; /* メイン + サイドバー */
+  gap: var(--gap-lg);
+}
+
+/* モバイルでは1カラム */
+@media (max-width: 880px) {
+  .app {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: var(--gap-md);
+  }
+}
+
+/* =========================
+   ヘッダー
+   ========================= */
+.header {
+  grid-column: 1 / -1;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: var(--gap-sm);
+  margin-bottom: 6px;
+}
+
+.brand {
+  display:flex;
+  align-items:center;
+  gap: 12px;
+}
+
+.logo {
+  width:44px;
+  height:44px;
+  border-radius:10px;
+  background: linear-gradient(135deg,var(--accent), var(--accent-2));
+  display: flex;
+  align-items:center;
+  justify-content:center;
+  color: rgba(2,6,23,0.02);
+  font-weight:700;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.35), inset 0 -6px 18px rgba(255,255,255,0.03);
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* 補助テキスト */
+.lead {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* =========================
+   コントロール領域（録音ボタン等）
+   ========================= */
+.controls {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+  border-radius: var(--radius-md);
+  padding: var(--gap-md);
+  display:flex;
+  align-items:center;
+  gap: var(--gap-md);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
+}
+
+/* 録音ボタン、アップロードボタン等の一般スタイル */
+.btn {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: var(--fs-base);
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  user-select: none;
+}
+
+/* プライマリ（録音など） */
+.btn-primary {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #041025;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(8,19,34,0.35);
+}
+
+.btn:active { transform: translateY(1px); }
+
+/* セカンダリ（設定、履歴） */
+.btn-secondary {
+  background: rgba(255,255,255,0.02);
+  color: var(--text);
+}
+
+/* 無効状態 */
+.btn[disabled], .btn.disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* アイコン付きボタン内の小アイコン */
+.btn .icon {
+  width:18px;
+  height:18px;
+  display:inline-block;
+  flex-shrink:0;
+}
+
+/* キーボードフォーカスの明確化（アクセシビリティ） */
+.btn:focus {
+  outline: 3px solid rgba(94,234,212,0.14);
+  outline-offset: 2px;
+}
+
+/* =========================
+   ドロップゾーン / ファイル入力
+   ========================= */
+.dropzone {
+  flex:1;
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(255,255,255,0.04);
+  padding: 16px;
+  display:flex;
+  align-items:center;
+  gap: var(--gap-md);
+  min-height: 72px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.006), rgba(255,255,255,0.002));
+}
+
+/* ドラッグオーバー時の強調 */
+.dropzone.dragover {
+  border-color: rgba(94,234,212,0.9);
+  background: linear-gradient(180deg, rgba(94,234,212,0.04), rgba(94,234,212,0.01));
+  transform: translateY(-2px);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+/* 視覚的に隠すがスクリーンリーダーには残す */
+.visually-hidden {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden; clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
+}
+
+/* ファイル名プレビュー */
+.file-info {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* =========================
+   メインコンテンツ / トランスクリプト領域
+   ========================= */
+.main {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+  border-radius: var(--radius-md);
+  padding: var(--gap-md);
+  min-height: 420px;
+  display:flex;
+  flex-direction:column;
+  gap: var(--gap-md);
+  overflow:hidden;
+}
+
+/* トランスクリプト（スクロール可能） */
+.transcript {
+  flex:1;
+  overflow:auto;
+  padding-right: 6px;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+
+/* 各発話セグメント */
+.segment {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 10px rgba(2,6,23,0.25);
+  border: 1px solid rgba(255,255,255,0.02);
+}
+
+/* 発話内の時間表示やスピーカー名 */
+.segment .meta {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:6px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* 強調テキスト（検索結果等） */
+.highlight {
+  background: linear-gradient(90deg, rgba(94,234,212,0.12), rgba(96,165,250,0.06));
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--text);
+  font-weight:600;
+}
+
+/* トランスクリプト上で「再生中」を示す小インジケータ */
+.segment.playing {
+  border-left: 4px solid var(--accent);
+  transform: translateY(-2px);
+}
+
+/* =========================
+   サイドバー（設定・言語・出力） 
+   ========================= */
+.sidebar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.003));
+  border-radius: var(--radius-md);
+  padding: var(--gap-md);
+  min-height: 420px;
+  display:flex;
+  flex-direction:column;
+  gap: var(--gap-sm);
+}
+
+/* セクション見出し */
+.section-title {
+  font-size: var(--fs-sm);
+  font-weight:700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* 設定の行（ラベル + コントロール） */
+.setting {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* セレクト、トグル等 */
+.select, .input, .toggle {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.02);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: var(--fs-base);
+}
+
+/* トグルスイッチ（簡易） */
+.toggle {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* =========================
+   プログレス / スピナー / ローダー
+   ========================= */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.06);
+  border-top-color: var(--accent);
+  animation: spin 900ms linear infinite;
+  display:inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* 大きめの線形プログレス（音声アップロード/処理の進捗） */
+.progress {
+  height: 8px;
+  width: 100%;
+  background: rgba(255,255,255,0.02);
+  border-radius: 999px;
+  overflow:hidden;
+}
+
+.progress > i {
+  display:block;
+  height:100%;
+  width:0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width var(--transition-medium);
+}
+
+/* アニメーションを抑えるモードへの配慮 */
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+  .dropzone.dragover { transition: none; transform: none; }
+  .segment.playing { transition: none; transform: none; }
+}
+
+/* =========================
+   フッター
+   ========================= */
+.footer {
+  grid-column: 1 / -1;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  margin-top: 6px;
+}
+
+/* =========================
+   レスポンシブ：小画面向け調整
+   ========================= */
+@media (max-width: 520px) {
+  :root {
+    --fs-base: 0.95rem;
+    --content-padding: 12px;
+  }
+
+  .logo { width:40px; height:40px; }
+  .app { padding: 12px; }
+  .controls { flex-direction: column; align-items: stretch; }
+  .dropzone { min-height: 62px; }
+  .sidebar { min-height: auto; }
+}
+
+/* =========================
+   ユーティリティ
+   ========================= */
+.hr {
+  height: 1px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 1px;
+  margin: 8px 0;
+}
+
+.small {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* セレクタで簡単に非表示 */
+.hidden { display: none !important; }
+
+/* エラーメッセージ */
+.error {
+  color: var(--danger);
+  font-weight:600;
+  background: rgba(251,113,133,0.06);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(251,113,133,0.08);
+}
+
+/* =========================
+   追加：印刷用（簡易）
+   ========================= */
+@media print {
+  body { background: #fff; color: #000; }
+  .app { box-shadow: none; background: none; border: none; }
+}
+
+/* =========================
+   使い方の補足（コメント）
+   - .app は HTML の最上位コンテナ。
+   - left column（.main）はトランスクリプトとプレイバック。
+   - right column（.sidebar）は設定やエクスポート。
+   - ドロップゾーンに .dragover を JS で付け外しして視覚的フィードバックを出します。
+   - 進捗を動かす場合は .progress > i の width を JS で更新します（例: style.width = '45%';）。
+   - 再生中のセグメントには .playing を付けると視覚的に強調されます。
+   - カラーテーマは :root の変数を書き換えるか body に .light-theme を付けて切替えます。
+   - アクセシビリティ：フォーカス時に outline を出す、.visually-hidden を使って
+     スクリーンリーダー対応のラベルを提供してください。
+*/
+
+/* End of style.css */

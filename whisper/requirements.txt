@@ -1,0 +1,21 @@
+# Whisperアプリに必要なPythonパッケージ一覧
+# requirements.txtに記述しておくことで、環境構築が容易になる
+
+# OpenAIのWhisperを利用するためのライブラリ
+openai-whisper
+
+# 音声処理に必要なライブラリ
+pydub
+ffmpeg-python
+
+# Webアプリ構築用（Flaskを使用する場合）
+flask
+
+# 音声ファイルの形式変換や処理に必要
+torchaudio
+
+# 数値計算用ライブラリ
+numpy
+
+# モデル実行のために必要
+torch
